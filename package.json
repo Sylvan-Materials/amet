@@ -1,0 +1,23 @@
+{
+  "name": "amet",
+  "version": "1.0.0",
+  "description": "C++23 Header-Only Graph Symmetry & Disjoint Routing Library",
+  "type": "module",
+  "scripts": {
+    "test" : "cd test && pwd && make -f Makefile && ./test  "
+  },
+  "devDependencies": {
+    "doctest" : "onqtam/doctest",
+    "expected" : "TartanLlama/expected",
+    "graph-v3": "stdgraph/graph-v3"
+  },
+  "keywords": [
+    "cpp23",
+    "graph-v3",
+    "automorphism",
+    "isomorphism",
+    "suurballe"
+  ],
+  "author": "rimmartin",
+  "license": "MIT"
+}

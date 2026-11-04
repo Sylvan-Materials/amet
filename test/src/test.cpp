@@ -3,6 +3,7 @@
 
 #include <amet/automorphism.h>
 #include <amet/Suurballe.h>
+#include <amet/VF2.h>
 #include <string>
 #include <vector>
 #include <array>
@@ -75,10 +76,10 @@ TEST_CASE("Validate Suurballe shortest path") {
     G diamondGraph;
     std::vector<graph::copyable_vertex_t<graph::vertex_id_t<G>, std::string>> bases;
     std::vector<graph::copyable_edge_t<graph::vertex_id_t<G>, std::string>> paths;
-    bases.push_back({static_cast<graph::vertex_id_t<G>>(bases.size()), "First"});
-    bases.push_back({static_cast<graph::vertex_id_t<G>>(bases.size()), "Second"});
-    bases.push_back({static_cast<graph::vertex_id_t<G>>(bases.size()), "Third"});
-    bases.push_back({static_cast<graph::vertex_id_t<G>>(bases.size()), "Home"});
+    bases.push_back({bases.size(), "First"});
+    bases.push_back({bases.size(), "Second"});
+    bases.push_back({bases.size(), "Third"});
+    bases.push_back({bases.size(), "Home"});
     paths.push_back({0, 1, "First-to-Second"});
     paths.push_back({0, 2, "First-to-Third"});
     paths.push_back({1, 2, "Second-to-Third"});
@@ -104,6 +105,101 @@ TEST_CASE("Validate Suurballe shortest path") {
     REQUIRE(result.success);
     CHECK(result.path1.size() == 2);
     CHECK(result.path2.size() == 2);
+}
+
+TEST_CASE("VF2++ Subgraph Isomorphism: Diamond in a Wheel Graph") {
+    // We define a simple graph type using graph-v3 structures
+    // Vertices store a string label, Edges are string as well, Allocator is standard
+    using UndirectedGraph = graph::container::dynamic_adjacency_graph<graph::container::vov_graph_traits<std::string, std::string, void, unsigned int, true>>;
+
+    // =========================================================================
+    // 1. Construct the Target UndirectedGraph: Wheel UndirectedGraph W5 (5 vertices, 8 edges)
+    // =========================================================================
+    UndirectedGraph wheel;
+    std::vector<graph::copyable_vertex_t<graph::vertex_id_t<UndirectedGraph>, std::string>> wheel_nodes;
+    std::vector<graph::copyable_edge_t<graph::vertex_id_t<UndirectedGraph>, std::string>> wheel_edges;
+    // Hub is index 0, Rim nodes are 1, 2, 3, 4
+    wheel_nodes.push_back({0, "Hub"});
+    wheel_nodes.push_back({1, "Rim 1"});
+    wheel_nodes.push_back({2, "Rim 2"});
+    wheel_nodes.push_back({3, "Rim 3"});
+    wheel_nodes.push_back({4, "Rim 4"});
+
+    // Spokes connecting hub to rim
+    wheel_edges.push_back({0, 1, "Hub-to-Rim1"});
+    wheel_edges.push_back({0, 2, "Hub-to-Rim2"});
+    wheel_edges.push_back({0, 3, "Hub-to-Rim3"});
+    wheel_edges.push_back({0, 4, "Hub-to-Rim4"});
+
+    // Outer rim cycle
+
+    // Rim 1
+    wheel_edges.push_back({1, 2, "Rim1-to-Rim2"});
+
+    // Rim 2
+    wheel_edges.push_back({2, 3, "Rim2-to-Rim3"});
+
+    // Rim 3
+    wheel_edges.push_back({3, 4, "Rim3-to-Rim4"});
+
+    // Rim 4
+    wheel_edges.push_back({4, 1, "Rim4-to-Rim1"});
+
+    wheel.reserve_vertices(wheel_nodes.size());
+    wheel.load_vertices(wheel_nodes, std::identity{});
+
+    wheel.reserve_edges(wheel_edges.size());
+    wheel.load_edges(wheel_edges, std::identity{});
+
+    // =========================================================================
+    // 2. Construct the Pattern UndirectedGraph: Diamond UndirectedGraph (4 vertices, 5 edges)
+    // =========================================================================
+    UndirectedGraph diamond;
+    std::vector<graph::copyable_vertex_t<graph::vertex_id_t<UndirectedGraph>, std::string>> diamond_nodes;
+    std::vector<graph::copyable_edge_t<graph::vertex_id_t<UndirectedGraph>, std::string>> diamond_edges;
+    diamond_nodes.push_back({diamond_nodes.size(), "Top"});        // ID: 0
+    diamond_nodes.push_back({diamond_nodes.size(), "Left"});       // ID: 1
+    diamond_nodes.push_back({diamond_nodes.size(), "Right"});      // ID: 2
+    diamond_nodes.push_back({diamond_nodes.size(), "Bottom"});     // ID: 3
+
+    // Source 1
+    diamond_edges.push_back({0, 1, "Top-to-Left"});
+    diamond_edges.push_back({0, 2, "Top-to-Right"});
+    diamond_edges.push_back({0, 3, "Top-to-Bottom"});
+    
+    // Source 1
+    diamond_edges.push_back({1, 3, "Left-to-Bottom"});
+
+    // Source 2
+    diamond_edges.push_back({2, 3, "Right-to-Bottom"});
+
+    diamond.reserve_vertices(diamond_nodes.size());
+    diamond.load_vertices(diamond_nodes, std::identity{});
+
+    diamond.reserve_edges(diamond_edges.size());
+    diamond.load_edges(diamond_edges, std::identity{});
+
+    // =========================================================================
+    // 3. Execution and Assertions
+    // =========================================================================
+    amet::VF2PlusPlus<UndirectedGraph, UndirectedGraph> matcher;
+    
+    size_t match_count = 0;
+    
+    // Simple pass-through predicates for pure topological matching
+    auto vertex_always_match = [](const auto&, auto, const auto&, auto) { return true; };
+    auto edge_always_match   = [](const auto&, const auto&, const auto&, const auto&) { return true; };
+
+    // Run the matching loop, passing a lambda to capture solution discoveries
+    matcher.match(diamond, wheel, vertex_always_match, edge_always_match, 
+                  [&match_count](const auto& bijection) {
+                      match_count++;
+                      // Optional: verify bijection map invariants
+                      CHECK(bijection.size() == 4); 
+                  });
+
+    // A Diamond graph embeds into a Wheel-5 exactly 8 times due to symmetry
+    CHECK(match_count == 16);
 }
 
 }

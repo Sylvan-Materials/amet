@@ -4,7 +4,7 @@ Header only at c++23 standard and based on graph-v3.
 
 #### Provide algorithms:
 - Bliss/Nauty-Style Automorphism
-- vf2
+- VF2++
 - Suurballe
 
 While header only there are doctest's coming

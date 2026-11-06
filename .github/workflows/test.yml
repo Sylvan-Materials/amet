@@ -14,20 +14,18 @@ jobs:
     - name: Checkout Codebase
       uses: actions/checkout@v4
 
-    - name: Upgrade System Toolchain to Experimental GCC
+    # Installs a standard stable compiler to process your C++23 source targets
+    - name: Install Build Toolchain
       run: |
-        sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
         sudo apt-get update
-        sudo apt-get install -y --only-upgrade libstdc++6   # Pulls the 3.4.36 ABI cleanly
-        sudo apt-get install -y g++-16 make                 # Installs your build environment
-        sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-16 100
-        sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-16 100
+        sudo apt-get install -y g++-13 make
 
-    - name: Fetch Pre-compiled cnpm
+    # THE FIX: Create a shell wrapper that redirects 'cnpm' straight into Docker!
+    # Mounting the workspace via -v lets cnpm populate your local cpp_modules folder safely.
+    - name: Configure cnpm Container Proxy
       run: |
-        docker create --name cnpm-container ghcr.io/datadriven-cam/cnpm:latest true
-        docker cp cnpm-container:/usr/local/bin/cnpm ./cnpm
-        docker rm cnpm-container
+        echo '#!/bin/bash' > cnpm
+        echo 'docker run --rm -v "${{ github.workspace }}:${{ github.workspace }}" -w "${{ github.workspace }}" ghcr.io/datadriven-cam/cnpm:latest "$@"' >> cnpm
         chmod +x ./cnpm
         sudo mv ./cnpm /usr/local/bin/cnpm
 

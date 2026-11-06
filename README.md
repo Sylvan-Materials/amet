@@ -5,6 +5,7 @@ Header only at c++23 standard and based on graph-v3.
 
 #### Provide algorithms:
 - Component Connectivity
+  - Connected components *implemented*
   - Biconnected components *implemented*
 - Bliss/Nauty-Style Automorphism
 - VF2++ *implemented*

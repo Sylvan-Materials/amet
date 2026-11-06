@@ -17,6 +17,7 @@
 #include <amet/automorphism.h>
 #include <amet/Suurballe.h>
 #include <amet/VF2.h>
+#include <amet/connected_components.h>
 #include <amet/biconnected_components.h>
 
 // Explicitly modeling a minimal graph-v3 compliant structural array
@@ -233,6 +234,69 @@ TEST_CASE("VF2++ Subgraph Isomorphism: Diamond in a Wheel Graph") {
 }
 
 using TestCG = graph::container::dynamic_adjacency_graph<graph::container::vov_graph_traits<int, int, void, unsigned int, true>>;
+
+TEST_CASE("amet::connected_components - Standard Disconnected Clusters Benchmark") {
+    // Topology Layout: 
+    // Cluster 0 (Triangle Loop):   Nodes 0-1-2-0
+    // Cluster 1 (Star / Tree):     Nodes 3-4, 3-5, 3-6
+    // Cluster 2 (Isolated Node):  Node 7
+    // Total Vertices: 8 (0 to 7)
+
+    TestCG test_graph;
+    
+    // 1. Populate Vertices via abstract, local primitive records
+    std::vector<abstract_vertex_record> vertices;
+    for (unsigned int i = 0; i < 8; ++i) {
+        vertices.push_back(abstract_vertex_record{.id = i, .value = 0});
+    }
+    
+    test_graph.load_vertices(vertices, [](const abstract_vertex_record& v) {
+        return std::make_pair(v.id, v.value);
+    });
+
+    // 2. Populate Edges Bidirectionally
+    std::vector<abstract_edge_record> edges;
+    auto add_edge = [&](unsigned int u, unsigned int v) {
+        edges.push_back(abstract_edge_record{.source_id = u, .target_id = v, .value = 1});
+        edges.push_back(abstract_edge_record{.source_id = v, .target_id = u, .value = 1});
+    };
+
+    // --- Cluster 0: Triangle Loop ---
+    add_edge(0, 1);
+    add_edge(1, 2);
+    add_edge(2, 0);
+
+    // --- Cluster 1: Star Configuration ---
+    add_edge(3, 4);
+    add_edge(3, 5);
+    add_edge(3, 6);
+
+    // --- Cluster 2: Node 7 remains completely isolated (No edges added) ---
+
+    test_graph.load_edges(edges, std::identity{});
+
+    // 3. Execute your clean abstract amet components engine
+    std::map<unsigned int, std::size_t> component_map;
+    std::size_t total_components = amet::connected_components(test_graph, component_map);
+
+    // 4. Assert Structural Invariants Rigorously
+    // We expect exactly 3 separate isolated networks
+    REQUIRE(total_components == 3);
+
+    // Verify Cluster 0 (Triangle nodes share the same label)
+    CHECK(component_map[0] == component_map[1]);
+    CHECK(component_map[1] == component_map[2]);
+
+    // Verify Cluster 1 (Star nodes share the same label)
+    CHECK(component_map[3] == component_map[4]);
+    CHECK(component_map[4] == component_map[5]);
+    CHECK(component_map[5] == component_map[6]);
+
+    // Verify absolute boundaries: The three clusters must possess unique IDs
+    CHECK(component_map[0] != component_map[3]);
+    CHECK(component_map[3] != component_map[7]);
+    CHECK(component_map[0] != component_map[7]);
+}
 
 TEST_CASE("amet::biconnected_components - Standard Developer Benchmark Topology") {
     TestCG test_graph;

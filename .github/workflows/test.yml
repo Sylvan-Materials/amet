@@ -18,8 +18,8 @@ jobs:
       run: |
         sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
         sudo apt-get update
-        sudo apt-get install -y g++-16 make
-        sudo apt-get dist-upgrade -y # Forces the global libstdc++ update to include 3.4.36 symbols
+        sudo apt-get install -y --only-upgrade libstdc++6   # Pulls the 3.4.36 ABI cleanly
+        sudo apt-get install -y g++-16 make                 # Installs your build environment
         sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-16 100
         sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-16 100
 

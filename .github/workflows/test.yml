@@ -14,17 +14,30 @@ jobs:
     - name: Checkout Codebase
       uses: actions/checkout@v4
 
-    # 1. Install a stable compiler for your project alongside the experimental snapshot library
-    - name: Provision GCC 14 and Bleeding-Edge Runtime Environment
+    - name: Install Nightly GCC Snapshot
       run: |
-        sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
-        sudo apt-get update
-        sudo apt-get install -y g++-14 gcc-snapshot make
-        sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
-        sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100
+        wget --quiet https://kayari.org/gcc-latest/gcc-latest.deb
+        sudo dpkg -i gcc-latest.deb
+        
+        # Force the environment to use the absolute latest experimental build paths
+        echo "/opt/gcc-latest/bin" >> $GITHUB_PATH
+        echo "CC=/opt/gcc-latest/bin/gcc" >> $GITHUB_ENV
+        echo "CXX=/opt/gcc-latest/bin/g++" >> $GITHUB_ENV
+        echo "LD_RUN_PATH=/opt/gcc-latest/lib64" >> $GITHUB_ENV
+        echo "LD_LIBRARY_PATH=/opt/gcc-latest/lib64:$LD_LIBRARY_PATH" >> $GITHUB_ENV
 
-    # 2. Extract your native cnpm binary straight onto the host runner filesystem
-    - name: Fetch Pre-compiled cnpm Binary
+    - name: Verify Compiler
+      run: $CXX --version # This will print out your expected experimental 16/17 branch state
+
+    - name: Log in to GHCR
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    # Extract the standalone ~1.4 MB binary directly into the runner's PATH
+    - name: Fetch Pre-compiled cnpm
       run: |
         docker create --name cnpm-container ghcr.io/datadriven-cam/cnpm:latest true
         docker cp cnpm-container:/usr/local/bin/cnpm ./cnpm
@@ -35,10 +48,8 @@ jobs:
     # 3. Inject the GCC 17 snapshot libraries into the runtime link environment
     - name: Install Development Dependencies via cnpm
       run: |
-        export LD_LIBRARY_PATH=/usr/lib/gcc-snapshot/lib:$LD_LIBRARY_PATH
         cnpm install
 
     - name: Execute Test Suite
       run: |
-        export LD_LIBRARY_PATH=/usr/lib/gcc-snapshot/lib:$LD_LIBRARY_PATH
          cnpm test

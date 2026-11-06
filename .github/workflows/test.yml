@@ -14,25 +14,31 @@ jobs:
     - name: Checkout Codebase
       uses: actions/checkout@v4
 
-    # Installs a standard stable compiler to process your C++23 source targets
-    - name: Install Build Toolchain
+    # 1. Install a stable compiler for your project alongside the experimental snapshot library
+    - name: Provision GCC 14 and Bleeding-Edge Runtime Environment
       run: |
+        sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
         sudo apt-get update
-        sudo apt-get install -y g++-13 make
+        sudo apt-get install -y g++-14 gcc-snapshot make
+        sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
+        sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100
 
-    # THE FIX: Create a shell wrapper that redirects 'cnpm' straight into Docker!
-    # Mounting the workspace via -v lets cnpm populate your local cpp_modules folder safely.
-    - name: Configure cnpm Container Proxy
+    # 2. Extract your native cnpm binary straight onto the host runner filesystem
+    - name: Fetch Pre-compiled cnpm Binary
       run: |
-        echo '#!/bin/bash' > cnpm
-        echo 'docker run --rm -v "${{ github.workspace }}:${{ github.workspace }}" -w "${{ github.workspace }}" --entrypoint /usr/local/bin/cnpm ghcr.io/datadriven-cam/cnpm:latest "$@"' >> cnpm
+        docker create --name cnpm-container ghcr.io/datadriven-cam/cnpm:latest true
+        docker cp cnpm-container:/usr/local/bin/cnpm ./cnpm
+        docker rm cnpm-container
         chmod +x ./cnpm
         sudo mv ./cnpm /usr/local/bin/cnpm
 
+    # 3. Inject the GCC 17 snapshot libraries into the runtime link environment
     - name: Install Development Dependencies via cnpm
       run: |
+        export LD_LIBRARY_PATH=/usr/lib/gcc-snapshot/lib:$LD_LIBRARY_PATH
         cnpm install
 
     - name: Execute Test Suite
       run: |
-        cnpm test
+        export LD_LIBRARY_PATH=/usr/lib/gcc-snapshot/lib:$LD_LIBRARY_PATH
+         cnpm test

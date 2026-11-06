@@ -14,12 +14,14 @@ jobs:
     - name: Checkout Codebase
       uses: actions/checkout@v4
 
-    - name: Set up GCC 13 for C++23 Support
+    - name: Upgrade System Toolchain and libstdc++
       run: |
+        sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
         sudo apt-get update
-        sudo apt-get install -y g++-13 make
-        sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-13 100
-        sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-13 100
+        sudo apt-get install -y g++-14 libstdc++6 make
+        sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
+        sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100
+
 
     - name: Fetch Pre-compiled cnpm
       run: |

@@ -1,20 +1,23 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include <doctest/doctest.h>
 
-#include <amet/automorphism.h>
-#include <amet/Suurballe.h>
-#include <amet/VF2.h>
 #include <string>
 #include <vector>
 #include <array>
 #include <functional>
 
+#include <graph/graph.hpp>
 #include "graph/container/dynamic_graph.hpp"
 #include <graph/container/traits/vov_graph_traits.hpp>
 #include "graph/adaptors/filtered_graph.hpp" // Adaptor to prune branches
 #include "graph/views/incidence.hpp"
 #include "graph/views/vertexlist.hpp"
 #include "graph/views/edgelist.hpp"
+
+#include <amet/automorphism.h>
+#include <amet/Suurballe.h>
+#include <amet/VF2.h>
+#include <amet/biconnected_components.h>
 
 // Explicitly modeling a minimal graph-v3 compliant structural array
 struct MockGraph {
@@ -48,6 +51,33 @@ struct BenzeneGraph {
     static constexpr std::array<std::string_view, 12> element_colors{
         "C", "C", "C", "C", "C", "C", "H", "H", "H", "H", "H", "H"
     };
+};
+
+// Define a tiny, generic tuple-like record structure directly in the test file 
+// to satisfy graph-v3's structured binding vertex requirements natively
+struct abstract_vertex_record {
+    unsigned int id;
+    int value;
+
+    template <std::size_t I>
+    decltype(auto) get() const {
+        if constexpr (I == 0) return id;
+        if constexpr (I == 1) return value;
+    }
+};
+
+namespace std {
+    template <> struct tuple_size<abstract_vertex_record> : integral_constant<size_t, 2> {};
+    template <size_t I> struct tuple_element<I, abstract_vertex_record> {
+        using type = conditional_t<I == 0, unsigned int, int>;
+    };
+}
+
+// Simple, primitive edge record structure for standard developer tests
+struct abstract_edge_record {
+    unsigned int source_id;
+    unsigned int target_id;
+    int value;
 };
 
 using G = graph::container::dynamic_adjacency_graph<graph::container::vov_graph_traits<std::string, std::string>>;
@@ -200,6 +230,138 @@ TEST_CASE("VF2++ Subgraph Isomorphism: Diamond in a Wheel Graph") {
 
     // A Diamond graph embeds into a Wheel-5 exactly 8 times due to symmetry
     CHECK(match_count == 16);
+}
+
+using TestCG = graph::container::dynamic_adjacency_graph<graph::container::vov_graph_traits<int, int, void, unsigned int, true>>;
+
+TEST_CASE("amet::biconnected_components - Standard Developer Benchmark Topology") {
+    TestCG test_graph;
+    
+    // 1. Populate Vertices via abstract, local primitive records
+    std::vector<abstract_vertex_record> vertices;
+    for (unsigned int i = 0; i < 8; ++i) {
+        vertices.push_back(abstract_vertex_record{.id = i, .value = 0});
+    }
+    
+    // 3. THE FIX: Pass a projection lambda to explicitly feed the internal structured binding!
+    test_graph.load_vertices(vertices, [](const abstract_vertex_record& v) {
+        return std::make_pair(v.id, v.value);
+    });
+
+    // 4. Populate Edges Bidirectionally
+    std::vector<abstract_edge_record> edges;
+    auto add_edge = [&](unsigned int u, unsigned int v) {
+        edges.push_back(abstract_edge_record{.source_id = u, .target_id = v, .value = 1});
+        edges.push_back(abstract_edge_record{.source_id = v, .target_id = u, .value = 1});
+    };
+
+    // Block 1: Left Simple Cycle (0-1-3-2-0)
+    add_edge(0, 1); add_edge(1, 3); add_edge(3, 2); add_edge(2, 0);
+
+    // Central Cut-Edge (Bridge)
+    add_edge(3, 5);
+
+    // Block 2: Right Fused Cycle / Diamond Block (Nodes 3, 4, 5, 6)
+    add_edge(5, 4); add_edge(4, 6); add_edge(6, 5); add_edge(3, 4);
+
+    // Block 3: Isolated Leaf Spoke
+    add_edge(5, 7);
+
+    test_graph.load_edges(edges, std::identity{});
+ 
+    // 3. Execute your clean amet engine
+    std::vector<std::vector<unsigned int>> components;
+    amet::biconnected_components(test_graph, components);
+
+    // 4. Invariant Assertions
+    REQUIRE(components.size() == 3);
+
+    std::ranges::sort(components, [](const auto& a, const auto& b) {
+        return a.size() > b.size();
+    });
+
+    CHECK(components[0].size() == 4);
+    CHECK(components[1].size() == 4);
+    CHECK(components[2].size() == 2);
+}
+
+TEST_CASE("amet::biconnected_components - Fused and Isolated Molecular Ring System") {
+    // Topology Layout: Naphthalene (fused 10-atom system) 
+    // connected via a single bridge bond at Node 4 to a Phenyl Ring (6-atom system).
+    // Total nodes: 16 (0 to 15).
+    
+    TestCG molecule_graph;
+    
+    // 1. Ingest Vertices using the clean pair-projection strategy
+    std::vector<abstract_vertex_record> vertices;
+    for (unsigned int i = 0; i < 16; ++i) {
+        vertices.push_back(abstract_vertex_record{.id = i, .value = 0});
+    }
+    molecule_graph.load_vertices(vertices, [](const abstract_vertex_record& v) {
+        return std::make_pair(v.id, v.value);
+    });
+
+    // 2. Ingest Bonds Bidirectionally
+    std::vector<abstract_edge_record> edges;
+    auto add_bond = [&](unsigned int u, unsigned int v) {
+        edges.push_back(abstract_edge_record{.source_id = u, .target_id = v, .value = 1});
+        edges.push_back(abstract_edge_record{.source_id = v, .target_id = u, .value = 1});
+    };
+
+    // --- Fused System (Naphthalene Block: Nodes 0 to 9) ---
+    // Outer perimeter cycle
+    add_bond(0, 1); add_bond(1, 2); add_bond(2, 3); add_bond(3, 4);
+    add_bond(4, 5); add_bond(5, 6); add_bond(6, 7); add_bond(7, 8);
+    add_bond(8, 9); add_bond(9, 0);
+    // The central fused ring bridge bond sharing two interior carbons
+    add_bond(1, 6); 
+
+    // --- The Molecular Interfacial Bridge ---
+    // Atom 4 is our structural Articulation Point! 
+    add_bond(4, 10);
+
+    // --- Isolated Pendant Ring (Phenyl Block: Nodes 10 to 15) ---
+    add_bond(10, 11); add_bond(11, 12); add_bond(12, 13);
+    add_bond(13, 14); add_bond(14, 15); add_bond(15, 10);
+
+    molecule_graph.load_edges(edges, std::identity{});
+
+    // 3. Execute the pure abstract amet engine
+    std::vector<std::vector<unsigned int>> components;
+    amet::biconnected_components(molecule_graph, components);
+
+    // 4. Invariant Assertions
+    // Unlike the dense diamond graph, these systems are separated by a true 
+    // structural path bridge (4, 10) that is completely outside the cycles.
+    // - Component 1: The Fused Naphthalene block (10 vertices)
+    // - Component 2: The Isolated Phenyl ring (6 vertices)
+    // - Component 3: The single connecting Bridge link {4, 10} (2 vertices)
+    // Total Blocks = 3.
+    REQUIRE(components.size() == 3);
+
+    // Sort subsets by size descending for clean tracking
+    std::ranges::sort(components, [](const auto& a, const auto& b) {
+        return a.size() > b.size();
+    });
+
+    CHECK(components[0].size() == 10); // Naphthalene block
+    CHECK(components[1].size() == 6);  // Phenyl block
+    CHECK(components[2].size() == 2);  // {4, 10} Interfacial Bridge
+
+    // Helper lambda to check presence cleanly
+    auto holds_vertex = [](const std::vector<unsigned int>& comp, unsigned int id) -> bool {
+        return std::ranges::find(comp, id) != comp.end();
+    };
+
+    // Explicitly verify that Node 4 acts as the true articulation point
+    // by ensuring it is present in both the Fused Block and the Bridge link.
+    size_t node_4_occurrences = 0;
+    for (const auto& comp : components) {
+        if (holds_vertex(comp, 4)) {
+            node_4_occurrences++;
+        }
+    }
+    CHECK(node_4_occurrences == 2);
 }
 
 }

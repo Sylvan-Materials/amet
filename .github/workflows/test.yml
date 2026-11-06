@@ -1,0 +1,38 @@
+name: Continuous Ametathetos Integration
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Codebase
+      uses: actions/checkout@v4
+
+    - name: Set up GCC 13 for C++23 Support
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y g++-13 make
+        sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-13 100
+        sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-13 100
+
+    - name: Fetch Pre-compiled cnpm
+      run: |
+        docker create --name cnpm-container ghcr.io/datadriven-cam/cnpm:latest true
+        docker cp cnpm-container:/usr/local/bin/cnpm ./cnpm
+        docker rm cnpm-container
+        chmod +x ./cnpm
+        sudo mv ./cnpm /usr/local/bin/cnpm
+
+    - name: Install Development Dependencies via cnpm
+      run: |
+        cnpm install
+
+    - name: Execute Test Suite
+      run: |
+        cnpm test

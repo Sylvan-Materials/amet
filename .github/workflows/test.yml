@@ -25,7 +25,7 @@ jobs:
     - name: Configure cnpm Container Proxy
       run: |
         echo '#!/bin/bash' > cnpm
-        echo 'docker run --rm -v "${{ github.workspace }}:${{ github.workspace }}" -w "${{ github.workspace }}" ghcr.io/datadriven-cam/cnpm:latest "$@"' >> cnpm
+        echo 'docker run --rm -v "${{ github.workspace }}:${{ github.workspace }}" -w "${{ github.workspace }}" --entrypoint /usr/local/bin/cnpm ghcr.io/datadriven-cam/cnpm:latest "$@"' >> cnpm
         chmod +x ./cnpm
         sudo mv ./cnpm /usr/local/bin/cnpm
 

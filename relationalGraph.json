@@ -1,0 +1,67 @@
+{
+  "graph": {
+    "directed": true,
+    "type": "graph type",
+    "label": "graph label",
+    "metadata": {
+      "user-defined": "values"
+    },
+    "nodes": {
+      "0": {
+        "id": "amet",
+        "label": "amet",
+        "type": "vertex type",
+        "metadata": {
+          "develop": "false",
+          "already_have_it": "true",
+          "user-defined": "values"
+        }
+    },
+      "1": {
+        "id": "doctest",
+        "label": "doctest",
+        "type": "vertex type",
+        "metadata": {
+          "develop": "false",
+          "already_have_it": "true",
+          "user-defined": "values"
+        }
+    },
+      "2": {
+        "id": "expected",
+        "label": "expected",
+        "type": "vertex type",
+        "metadata": {
+          "develop": "false",
+          "already_have_it": "true",
+          "user-defined": "values"
+        }
+    },
+      "3": {
+        "id": "graph-v3",
+        "label": "graph-v3",
+        "type": "vertex type",
+        "metadata": {
+          "develop": "false",
+          "already_have_it": "true",
+          "user-defined": "values"
+        }
+    }
+    },
+    "edges": [
+      {
+      {
+        "source": "0",
+        "relation": "depends on",
+        "target": "1"    }
+,      {
+        "source": "0",
+        "relation": "depends on",
+        "target": "2"    }
+,      {
+        "source": "0",
+        "relation": "depends on",
+        "target": "3"    }
+    ]
+  }
+}

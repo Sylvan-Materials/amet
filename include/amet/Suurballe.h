@@ -7,6 +7,8 @@
 #include <ranges>
 #include <optional>
 #include <algorithm>
+#include <limits>
+#include <numeric>
 
 namespace amet{
     template <graph::adj_list::adjacency_list G>
@@ -36,6 +38,7 @@ namespace amet{
             // --- STEP 1: First Dijkstra Pass ---
             std::vector<double> dist1(num_v, std::numeric_limits<double>::max());
             std::vector<graph::vertex_id_t<G>> pred1(num_v);
+            std::iota(pred1.begin(), pred1.end(), vertex_t{0});
             
             dist1[source] = 0.0;
             
@@ -44,7 +47,7 @@ namespace amet{
             graph::dijkstra_shortest_paths(g, source, graph::container_value_fn(dist1), graph::container_value_fn(pred1), weight_proj);
 
             // If target is unreachable on the first pass, no disjoint paths exist
-            if (dist1[target] == std::numeric_limits<double>::max()) {
+            if (dist1[target] == 1e17) {
                 return result;
             }
 
@@ -52,8 +55,7 @@ namespace amet{
             using edge_nct = edge_t;//std::ranges::iterator_t<decltype(graph::adj_list::edges(const_cast<G&>(g), std::declval<const vertex_t&>()))>;
             std::vector<edge_nct> p1_edges;
             vertex_t curr = target;
-            while (curr != source) {
-                if (pred1[curr]==pred1[source]) break;
+            while (curr != source && pred1[curr] != curr) {
                 auto edges_view = graph::adj_list::edges(g, pred1[curr]);
                 auto it = std::ranges::find_if(edges_view, [curr, &g](const auto& edge_desc) {
                     return graph::target_id(g, edge_desc) == curr; 
@@ -73,33 +75,34 @@ namespace amet{
             // the weight updates and edge-reversals through a custom weight function wrapper
             // for the second Dijkstra pass.
             
-            auto modified_weight = [&](const edge_t& edge) -> double {
-                vertex_t u = graph::source_id(g, *edge);
-                vertex_t v = graph::target_id(g, *edge);
+            auto modified_weight = [&](const G& gr, const auto& edge_desc) -> double {
+                vertex_t u = graph::source_id(gr, edge_desc);
+                vertex_t v = graph::target_id(gr, edge_desc);
                 
                 // If this edge was used in Path 1, conceptually its reversed counterpart 
                 // has a cost of 0, but its forward orientation is blocked / infinite.
                 bool is_p1_edge = std::ranges::any_of(p1_edges, [&](const edge_nct& p1_e) {
-                    return graph::source_id(g, *p1_e) == u && graph::target_id(g, *p1_e) == v;
+                    return graph::source_id(gr, *p1_e) == u && graph::target_id(gr, *p1_e) == v;
                 });
 
                 if (is_p1_edge) {
-                    return std::numeric_limits<double>::max(); // Block forward path reuse
+                    return 1e18; // Block forward path reuse
                 }
 
-                double w = static_cast<double>(std::invoke(weight_proj, g, *edge));
+                double w = static_cast<double>(std::invoke(weight_proj, gr, edge_desc));
                 return w - dist1[v] + dist1[u];
             };
 
             // --- STEP 4: Second Dijkstra Pass ---
             std::vector<double> dist2(num_v, std::numeric_limits<double>::max());
             std::vector<graph::vertex_id_t<G>> pred2(num_v);
+            std::iota(pred2.begin(), pred2.end(), vertex_t{0});
             
             dist2[source] = 0.0;
             
-            graph::dijkstra_shortest_paths(g, source, graph::container_value_fn(dist2), graph::container_value_fn(pred2), weight_proj);
+            graph::dijkstra_shortest_paths(g, source, graph::container_value_fn(dist2), graph::container_value_fn(pred2), modified_weight);
 
-            if (dist2[target] == std::numeric_limits<double>::max()) {
+            if (dist2[target] == 1e17) {
                 // No second edge-disjoint path available
                 result.path1.reserve(p1_edges.size());
                 for (auto& it : p1_edges) {
@@ -114,8 +117,7 @@ namespace amet{
             // Trace path 2
             std::vector<edge_nct> p2_edges;
             curr = target;
-            while (curr != source) {
-                if (pred2[curr]==pred2[source]) break;
+            while (curr != source && pred2[curr] != curr) {
                     auto edges_view = graph::adj_list::edges(g, pred2[curr]);
                 auto it = std::ranges::find_if(edges_view, [curr, &g](const auto& edge_desc) {
                     return graph::target_id(g, edge_desc) == curr; 
